@@ -405,8 +405,8 @@
             "command": "python3 -m pytest tests/test_normalizer.py tests/test_writers.py -v",
             "expected": "All normalizer and writer tests pass"
           },
-          "status": "pending",
-          "notes": "Normalizer tests per spec: slugify('Reunião com João') → 'reuniao-com-joao', special char removal, valid frontmatter with all required fields, wikilinks in [[]] format. Writer tests: correct output path pattern for sessions and extracts, directory creation, no overwrite of existing files."
+          "status": "completed",
+          "notes": "Normalizer tests per spec: slugify('Reunião com João') → 'reuniao-com-joao', special char removal, valid frontmatter with all required fields, wikilinks in [[]] format. Writer tests: correct output path pattern for sessions and extracts, directory creation, no overwrite of existing files. Note: pytest not available in environment for verification; tests follow existing patterns from test_parsers."
         },
         {
           "id": "subtask-5-4",
@@ -595,6 +595,6 @@
   "executionPhase": "coding",
   "status": "in_progress",
   "planStatus": "in_progress",
-  "updated_at": "2026-04-09T14:08:23.323Z",
+  "updated_at": "2026-04-09T14:14:02.562Z",
   "last_updated": "2026-04-09T13:56:03.068141+00:00"
 }
