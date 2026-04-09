@@ -1,0 +1,596 @@
+{
+  "feature": "CentralAgent Brain - AI Agent Conversation Ingestion Pipeline",
+  "workflow_type": "feature",
+  "workflow_rationale": "Greenfield project building a complete ingestion pipeline from scratch. No existing code to refactor or migrate. The pipeline architecture, parsers, normalization engine, and CLI must all be created new. Feature workflow follows service dependency order: foundation → parsers → normalizer/writers → pipeline → CLI → tests.",
+  "phases": [
+    {
+      "id": "phase-1-foundation",
+      "name": "Project Scaffolding & Core Models",
+      "type": "setup",
+      "description": "Create the project structure, configuration, and core data models that all subsequent phases depend on. This includes pyproject.toml, settings, dataclass models, and abstract base classes for parsers and writers.",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Create project configuration: pyproject.toml with entry points and dev dependencies, config/settings.py with Settings and AgentConfig dataclasses, src/__init__.py and src/__main__.py for module execution",
+          "service": "centralagent-brain",
+          "files_to_modify": [],
+          "files_to_create": [
+            "pyproject.toml",
+            "config/__init__.py",
+            "config/settings.py",
+            "src/__init__.py",
+            "src/__main__.py"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"from config.settings import Settings; s = Settings(); print(f'vault={s.vault_path}, agents={len(s.agents)}')\"",
+            "expected": "vault=~/Obsidian path, agents=5"
+          },
+          "status": "completed",
+          "notes": "pyproject.toml should define [project.scripts] for centralagent-brain CLI entry point. Settings uses dataclasses with sensible defaults for all 5 agents. No external dependencies for core."
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Create core data models: Session, Message, ToolUse, KnowledgeItem, and supporting dataclasses using stdlib dataclasses. These are the shared types that parsers produce and writers consume.",
+          "service": "centralagent-brain",
+          "files_to_modify": [],
+          "files_to_create": [
+            "src/models.py"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"from src.models import Session, Message, ToolUse, KnowledgeItem; print('Models OK')\"",
+            "expected": "Models OK"
+          },
+          "status": "completed",
+          "notes": "Models must include: Session(id, agent, timestamp, project, cwd, model, messages, metadata), Message(role, content, timestamp, tool_uses), ToolUse(name, input, output), KnowledgeItem(type, title, content, tags, wikilinks, source_session). Use Optional and field defaults extensively."
+        },
+        {
+          "id": "subtask-1-3",
+          "description": "Create abstract base parser interface and parser registry. BaseParser defines discover_sessions(), parse_session(), and agent_name property. Registry maps agent names to parser classes.",
+          "service": "centralagent-brain",
+          "files_to_modify": [],
+          "files_to_create": [
+            "src/parsers/__init__.py",
+            "src/parsers/base.py"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"from src.parsers.base import BaseParser; print('BaseParser OK')\"",
+            "expected": "BaseParser OK"
+          },
+          "status": "completed",
+          "notes": "BaseParser ABC must have: discover_sessions() -> List[Path], parse_session(path: Path) -> Session, agent_name property. Registry in __init__.py should provide get_parser(agent_name) -> BaseParser and list_parsers() -> List[str]."
+        },
+        {
+          "id": "subtask-1-4",
+          "description": "Create abstract base writer interface. BaseWriter defines write_session() and write_extract() methods. Also create writer __init__.py with writer registry.",
+          "service": "centralagent-brain",
+          "files_to_modify": [],
+          "files_to_create": [
+            "src/writers/__init__.py",
+            "src/writers/base.py"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"from src.writers.base import BaseWriter; print('BaseWriter OK')\"",
+            "expected": "BaseWriter OK"
+          },
+          "status": "completed",
+          "notes": "BaseWriter ABC should define: write(session: Session, output_dir: Path) -> Path. Concrete implementations will be SessionWriter and ExtractWriter."
+        }
+      ]
+    },
+    {
+      "id": "phase-2-parsers",
+      "name": "Agent Parser Implementation",
+      "type": "implementation",
+      "description": "Implement all 5 agent parsers. Each parser handles a specific agent's data format and produces normalized Session objects. Parsers are independent of each other but all depend on the foundation phase for base classes and models.",
+      "depends_on": [
+        "phase-1-foundation"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Implement Claude Code JSONL parser. Reads ~/.claude/projects/{name}/{uuid}.jsonl. Handles dual content types (string vs array of text objects), skips isMeta messages, skips encrypted_content blocks, resolves parentUuid tree into chronological order. Streams JSONL line-by-line.",
+          "service": "centralagent-brain",
+          "files_to_modify": [
+            "src/parsers/__init__.py"
+          ],
+          "files_to_create": [
+            "src/parsers/claude_code.py",
+            "tests/fixtures/claude_code_session.jsonl"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"from src.parsers.claude_code import ClaudeCodeParser; p = ClaudeCodeParser(); print(f'agent={p.agent_name}')\"",
+            "expected": "agent=claude-code"
+          },
+          "status": "pending",
+          "notes": "Test fixture should include: user messages with string content, user messages with array content, assistant messages with text/tool_use/thinking blocks, isMeta messages (to skip), progress messages (to skip), encrypted_content in thinking blocks. Handle malformed JSONL lines gracefully."
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Implement Codex JSONL parser. Reads ~/.codex/sessions/{Y}/{M}/{D}/rollout-*.jsonl. Extracts messages from response_item entries, reads session_meta for metadata, filters XML-wrapped system messages (content starting with <). Extracts agent_reasoning and turn_context for enrichment.",
+          "service": "centralagent-brain",
+          "files_to_modify": [
+            "src/parsers/__init__.py"
+          ],
+          "files_to_create": [
+            "src/parsers/codex.py",
+            "tests/fixtures/codex_session.jsonl"
+          ],
+          "patterns_from": [
+            "src/parsers/claude_code.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"from src.parsers.codex import CodexParser; p = CodexParser(); print(f'agent={p.agent_name}')\"",
+            "expected": "agent=codex"
+          },
+          "status": "pending",
+          "notes": "Codex uses nested payload structure unlike Claude Code. Key types: session_meta (metadata), response_item (messages), event_msg (user_message, agent_reasoning), turn_context (model, cwd). Fixture must include XML-wrapped system messages to test filtering. Never load logs_1.sqlite."
+        },
+        {
+          "id": "subtask-2-3",
+          "description": "Implement Cursor SQLite parser. Queries ~/.cursor/chats/*/store.db and legacy ~/.config/Cursor/User/workspaceStorage/*/state.vscdb. Reads cursorDiskKV table, parses composerData and bubbleId keys. Opens databases read-only to avoid WAL conflicts. Handles locked databases gracefully.",
+          "service": "centralagent-brain",
+          "files_to_modify": [
+            "src/parsers/__init__.py"
+          ],
+          "files_to_create": [
+            "src/parsers/cursor.py",
+            "tests/fixtures/cursor_store.db"
+          ],
+          "patterns_from": [
+            "src/parsers/claude_code.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"from src.parsers.cursor import CursorParser; p = CursorParser(); print(f'agent={p.agent_name}')\"",
+            "expected": "agent=cursor"
+          },
+          "status": "pending",
+          "notes": "CRITICAL: This fixes the broken Cursor export. Must use sqlite3 with file:path?mode=ro URI. Key patterns: composerData:{id} for session metadata, bubbleId:{composerId}:{bubbleId} for messages. Legacy format: workbench.panel.aichat.view.aichat.chatdata. Test fixture is a minimal SQLite db created programmatically. Handle OperationalError for locked dbs."
+        },
+        {
+          "id": "subtask-2-4",
+          "description": "Implement Factory Droid parser. Reads ~/.factory/sessions/{name}/{uuid}.jsonl plus companion {uuid}.settings.json. Extracts messages from type:'message' entries, metadata from session_start and settings file. Extracts todo_state entries as task progress artifacts.",
+          "service": "centralagent-brain",
+          "files_to_modify": [
+            "src/parsers/__init__.py"
+          ],
+          "files_to_create": [
+            "src/parsers/factory_droid.py",
+            "tests/fixtures/factory_droid_session.jsonl",
+            "tests/fixtures/factory_droid_settings.json"
+          ],
+          "patterns_from": [
+            "src/parsers/claude_code.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"from src.parsers.factory_droid import FactoryDroidParser; p = FactoryDroidParser(); print(f'agent={p.agent_name}')\"",
+            "expected": "agent=factory-droid"
+          },
+          "status": "pending",
+          "notes": "Similar to Claude Code format but with key differences: session_start instead of queue-operation, flat parentId instead of parentUuid, separate settings JSON file. Content uses Anthropic API format (content array with type/text). Fixture must include session_start, message, and todo_state types plus a companion settings JSON."
+        },
+        {
+          "id": "subtask-2-5",
+          "description": "Implement Pi stub adapter. Reads manually-dropped JSON or plain text files from a configurable directory (default: ~/.centralagent/pi-import/). Placeholder until Pi provides an export API.",
+          "service": "centralagent-brain",
+          "files_to_modify": [
+            "src/parsers/__init__.py"
+          ],
+          "files_to_create": [
+            "src/parsers/pi.py",
+            "tests/fixtures/pi_manual_import.json"
+          ],
+          "patterns_from": [
+            "src/parsers/claude_code.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"from src.parsers.pi import PiParser; p = PiParser(); print(f'agent={p.agent_name}')\"",
+            "expected": "agent=pi"
+          },
+          "status": "pending",
+          "notes": "Minimal stub. Accept JSON files with a simple schema: {messages: [{role, content, timestamp}], metadata: {}}. Also accept plain .txt files as single-message sessions. Fixture should be a simple JSON manual import."
+        }
+      ]
+    },
+    {
+      "id": "phase-3-normalization",
+      "name": "Normalization Engine & Output Writers",
+      "type": "implementation",
+      "description": "Build the normalization layer that converts parsed Sessions into enriched output, and the writers that produce Markdown+YAML files conforming to MEMORY.md protocol. This phase can run in parallel with Phase 2 since it depends only on Phase 1 models and base classes.",
+      "depends_on": [
+        "phase-1-foundation"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Implement normalization engine. Transforms parsed Session objects into enriched session content and structured KnowledgeItem instances (decisions, insights, patterns, tools used, code artifacts). Implements slugification per MEMORY.md rules and wikilink generation.",
+          "service": "centralagent-brain",
+          "files_to_modify": [],
+          "files_to_create": [
+            "src/normalizer.py"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"from src.normalizer import Normalizer, slugify; print(slugify('Reunião com João')); print('Normalizer OK')\"",
+            "expected": "reuniao-com-joao\nNormalizer OK"
+          },
+          "status": "pending",
+          "notes": "Normalizer must: (1) Extract structured knowledge categories from session content, (2) Generate wikilinks per MEMORY.md protocol, (3) Implement slugify() using unicodedata.normalize('NFKD') → ASCII → lowercase → kebab-case, (4) Generate YAML frontmatter for both session logs and extracts, (5) Format Markdown body with sections: User Messages, Assistant Responses, Tool Usage, Source, See Also."
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Implement session writer. Writes session log files to {vault}/Sessions/{agent-type}/{date}-{project}-{topic}.md with YAML frontmatter containing all required fields. Creates directories as needed. Respects append-only rule (never overwrites existing files).",
+          "service": "centralagent-brain",
+          "files_to_modify": [],
+          "files_to_create": [
+            "src/writers/session_writer.py"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"from src.writers.session_writer import SessionWriter; print('SessionWriter OK')\"",
+            "expected": "SessionWriter OK"
+          },
+          "status": "pending",
+          "notes": "Output path pattern: Sessions/{agent-type}/{date}-{project}-{topic}.md. YAML frontmatter must include: type, date, project, tags, session_id, agent, source_file, cwd, model, total_messages. Body sections: User Messages, Assistant Responses, Tool Usage, Source, See Also. Must create output directories automatically."
+        },
+        {
+          "id": "subtask-3-3",
+          "description": "Implement extract writer. Writes knowledge extract files to {vault}/agents/{agent}/extracts/memory-extract-{agent}-{date}.md with retention metadata. Follows existing bilingual (Portuguese) header convention.",
+          "service": "centralagent-brain",
+          "files_to_modify": [],
+          "files_to_create": [
+            "src/writers/extract_writer.py"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"from src.writers.extract_writer import ExtractWriter; print('ExtractWriter OK')\"",
+            "expected": "ExtractWriter OK"
+          },
+          "status": "pending",
+          "notes": "Output path pattern: agents/{agent}/extracts/memory-extract-{agent}-{date}.md. YAML frontmatter: title, type (memory-extract), agent, source, category, status (active), retention (inbox), tags, createdAt, date. Body sections: Resumo, Conteudo migrado, Acompanhamento, Wikilinks relacionados. Portuguese headers per existing convention."
+        }
+      ]
+    },
+    {
+      "id": "phase-4-pipeline",
+      "name": "Pipeline Orchestration, Dedup & CLI",
+      "type": "implementation",
+      "description": "Build the pipeline orchestrator that chains discover → parse → normalize → deduplicate → write, the deduplication tracker, and the CLI interface. Depends on parsers and writers being complete.",
+      "depends_on": [
+        "phase-2-parsers",
+        "phase-3-normalization"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "Implement deduplication tracker. Tracks exported session IDs in .state/last_run.json. On subsequent runs, skips sessions already processed. Supports --force flag to re-export all. Stores per-agent timestamps and session ID sets.",
+          "service": "centralagent-brain",
+          "files_to_modify": [],
+          "files_to_create": [
+            "src/dedup.py"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"from src.dedup import DedupTracker; d = DedupTracker(); print('DedupTracker OK')\"",
+            "expected": "DedupTracker OK"
+          },
+          "status": "pending",
+          "notes": "State file at .state/last_run.json. Schema: {agent_name: {last_run: ISO8601, exported_sessions: [session_ids]}}. Methods: is_exported(agent, session_id) -> bool, mark_exported(agent, session_id), get_last_run(agent) -> datetime, save(), load(). Create .state/ directory if missing."
+        },
+        {
+          "id": "subtask-4-2",
+          "description": "Implement pipeline orchestrator. Chains: discover sessions → parse each → normalize → deduplicate → write output. Handles per-agent and batch (--all) execution. Supports --dry-run mode. Provides logging and progress reporting.",
+          "service": "centralagent-brain",
+          "files_to_modify": [],
+          "files_to_create": [
+            "src/pipeline.py"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"from src.pipeline import Pipeline; print('Pipeline OK')\"",
+            "expected": "Pipeline OK"
+          },
+          "status": "pending",
+          "notes": "Pipeline class orchestrates full flow. Constructor takes Settings. Methods: run(agents=None, dry_run=False, force=False, verbose=False) -> PipelineResult, list_sessions(agent=None) -> List[SessionInfo], status() -> Dict[str, AgentStatus]. Must handle: missing agent directories gracefully (skip with info log), malformed files (skip with warning), empty sessions (skip per settings). Return structured result with counts per agent."
+        },
+        {
+          "id": "subtask-4-3",
+          "description": "Implement CLI interface with argparse. Provides ingest, list, and status subcommands. Supports --agent filter, --all, --dry-run, --force, and --verbose flags. Correct exit codes (0 success, 1 error).",
+          "service": "centralagent-brain",
+          "files_to_modify": [
+            "src/__main__.py"
+          ],
+          "files_to_create": [
+            "src/cli.py"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"from src.cli import create_parser; p = create_parser(); args = p.parse_args(['ingest', '--agent', 'claude-code', '--dry-run']); print(f'cmd={args.command}, agent={args.agent}, dry_run={args.dry_run}')\"",
+            "expected": "cmd=ingest, agent=claude-code, dry_run=True"
+          },
+          "status": "pending",
+          "notes": "Subcommands: ingest (run pipeline for one or all agents), list (show discovered sessions), status (show last run info per agent). Global flags: --verbose. Ingest flags: --agent NAME, --all, --dry-run, --force. List flags: --agent NAME. Error handling: invalid agent name shows valid options. __main__.py just calls cli.main()."
+        }
+      ]
+    },
+    {
+      "id": "phase-5-tests",
+      "name": "Comprehensive Test Suite",
+      "type": "implementation",
+      "description": "Build the complete test suite covering all parsers, normalizer, writers, dedup, and pipeline. Uses pytest with fixtures for each agent format. Tests verify correctness against the spec's QA acceptance criteria.",
+      "depends_on": [
+        "phase-4-pipeline"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-5-1",
+          "description": "Create test infrastructure: conftest.py with shared fixtures and sample data factories, __init__.py files, and verify all test fixtures created in parser phases are complete and correct.",
+          "service": "centralagent-brain",
+          "files_to_modify": [],
+          "files_to_create": [
+            "tests/__init__.py",
+            "tests/conftest.py",
+            "tests/test_parsers/__init__.py"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python3 -m pytest tests/ --collect-only 2>&1 | head -5",
+            "expected": "collected 0 items (or similar pytest collection output)"
+          },
+          "status": "pending",
+          "notes": "conftest.py should provide: tmp_vault fixture (temp directory mimicking Obsidian vault structure), sample_session factory, sample_message factory, sample_settings fixture (Settings with test paths). Ensure tests/fixtures/ contains all sample data files from parser phases."
+        },
+        {
+          "id": "subtask-5-2",
+          "description": "Create parser unit tests for all 5 agents. Tests cover: content type handling, message filtering, metadata extraction, error handling (malformed lines, locked DBs), edge cases (empty sessions, encrypted content).",
+          "service": "centralagent-brain",
+          "files_to_modify": [],
+          "files_to_create": [
+            "tests/test_parsers/test_claude_code.py",
+            "tests/test_parsers/test_codex.py",
+            "tests/test_parsers/test_cursor.py",
+            "tests/test_parsers/test_factory_droid.py",
+            "tests/test_parsers/test_pi.py"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python3 -m pytest tests/test_parsers/ -v",
+            "expected": "All parser tests pass"
+          },
+          "status": "pending",
+          "notes": "Per spec QA criteria: Claude Code tests - string content, array content, isMeta skip, encrypted thinking skip. Codex tests - user message extraction, XML filtering, session metadata. Cursor tests - SQLite reading, locked DB handling. Factory Droid tests - JSONL+settings, todo_state extraction. Pi tests - manual JSON import."
+        },
+        {
+          "id": "subtask-5-3",
+          "description": "Create normalizer and writer unit tests. Tests cover: slugification (accents, special chars), YAML frontmatter generation, wikilink formatting, session log output format, extract output format, directory creation, append-only behavior.",
+          "service": "centralagent-brain",
+          "files_to_modify": [],
+          "files_to_create": [
+            "tests/test_normalizer.py",
+            "tests/test_writers.py"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python3 -m pytest tests/test_normalizer.py tests/test_writers.py -v",
+            "expected": "All normalizer and writer tests pass"
+          },
+          "status": "pending",
+          "notes": "Normalizer tests per spec: slugify('Reunião com João') → 'reuniao-com-joao', special char removal, valid frontmatter with all required fields, wikilinks in [[]] format. Writer tests: correct output path pattern for sessions and extracts, directory creation, no overwrite of existing files."
+        },
+        {
+          "id": "subtask-5-4",
+          "description": "Create pipeline, dedup, and integration tests. Tests cover: dedup tracking and force flag, full pipeline flow (parse → normalize → write), dry-run mode, multi-agent batch, error handling for missing directories.",
+          "service": "centralagent-brain",
+          "files_to_modify": [],
+          "files_to_create": [
+            "tests/test_pipeline.py",
+            "tests/test_dedup.py"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python3 -m pytest tests/test_pipeline.py tests/test_dedup.py -v",
+            "expected": "All pipeline and dedup tests pass"
+          },
+          "status": "pending",
+          "notes": "Dedup tests: second run skips exported sessions, --force re-exports. Pipeline tests: full flow from fixture data to output file, dry-run produces no files, missing agent directory skipped gracefully, batch run processes all agents. Integration test: parse fixture → normalize → write → verify output file content matches expected format."
+        }
+      ]
+    },
+    {
+      "id": "phase-6-integration",
+      "name": "End-to-End Integration & Verification",
+      "type": "integration",
+      "description": "Final verification phase. Run the full pipeline against test fixtures, verify output format matches MEMORY.md protocol, ensure CLI works end-to-end, and validate all acceptance criteria from the spec.",
+      "depends_on": [
+        "phase-5-tests"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-6-1",
+          "description": "End-to-end verification: run full test suite, verify CLI commands work, validate output format against MEMORY.md protocol, ensure all spec acceptance criteria are met.",
+          "service": "centralagent-brain",
+          "all_services": true,
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "e2e",
+            "steps": [
+              "Run python3 -m pytest tests/ -v to verify all tests pass",
+              "Run python3 -m centralagent_brain --help to verify CLI works",
+              "Run python3 -m centralagent_brain ingest --agent claude-code --dry-run to verify dry-run",
+              "Run python3 -m centralagent_brain list --agent claude-code to verify listing",
+              "Verify YAML frontmatter in test output matches required fields",
+              "Verify slugification handles Portuguese accents correctly",
+              "Verify wikilinks use [[projects/slug]] format",
+              "Verify session log has all sections: User Messages, Assistant Responses, Tool Usage, Source, See Also",
+              "Verify extract has retention fields: retention: inbox, status: active",
+              "Verify dedup prevents duplicate exports on re-run"
+            ]
+          },
+          "status": "pending",
+          "notes": "This is the final verification step. Fix any issues found. All 14 success criteria from the spec must be validated. Key checks: (1) All parser imports work, (2) CLI subcommands parse correctly, (3) Output matches vault conventions, (4) Edge cases handled gracefully."
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 6,
+    "total_subtasks": 20,
+    "services_involved": [
+      "centralagent-brain"
+    ],
+    "estimated_files_to_create": 38,
+    "parallelism": {
+      "max_parallel_phases": 2,
+      "parallel_groups": [
+        {
+          "phases": [
+            "phase-2-parsers",
+            "phase-3-normalization"
+          ],
+          "reason": "Both depend only on phase-1-foundation, completely different file sets. Phase 2 creates src/parsers/*.py and test fixtures. Phase 3 creates src/normalizer.py and src/writers/*.py. Zero file overlap."
+        }
+      ],
+      "recommended_workers": 2,
+      "speedup_estimate": "1.3x faster than sequential (phases 2+3 run in parallel, saving ~30% time for those phases)"
+    },
+    "startup_command": "source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 001 --parallel 2"
+  },
+  "verification_strategy": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "test_creation_phase": "phase-5-tests",
+    "test_types_required": [
+      "unit",
+      "integration"
+    ],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "All 4 JSONL/SQLite parsers successfully parse sample session data",
+      "Pi stub adapter accepts manually-formatted input files",
+      "Normalizer produces valid Markdown+YAML conforming to MEMORY.md protocol",
+      "Session writer outputs files matching existing Sessions/claude-code/ format",
+      "Extract writer outputs files matching existing agents/*/extracts/ format",
+      "Output includes assistant responses and tool usage (improvement over current exports)",
+      "Deduplication prevents re-exporting already-processed sessions",
+      "CLI provides ingest, list, and status subcommands with expected flags",
+      "--dry-run mode works without writing any files",
+      "No console errors during normal operation",
+      "All unit tests pass",
+      "Integration test validates full pipeline for at least one agent",
+      "Cursor parser successfully reads SQLite data (fixing the broken export)",
+      "Factory Droid sessions are exported for the first time (new capability)"
+    ],
+    "verification_steps": [
+      {
+        "name": "Unit Tests - All Parsers",
+        "command": "python3 -m pytest tests/test_parsers/ -v",
+        "expected_outcome": "All parser tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Unit Tests - Normalizer & Writers",
+        "command": "python3 -m pytest tests/test_normalizer.py tests/test_writers.py -v",
+        "expected_outcome": "All normalizer and writer tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Unit Tests - Pipeline & Dedup",
+        "command": "python3 -m pytest tests/test_pipeline.py tests/test_dedup.py -v",
+        "expected_outcome": "All pipeline and dedup tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Full Test Suite",
+        "command": "python3 -m pytest tests/ -v",
+        "expected_outcome": "All tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "CLI Verification",
+        "command": "python3 -m centralagent_brain --help",
+        "expected_outcome": "Shows usage with subcommands",
+        "type": "test",
+        "required": true,
+        "blocking": false
+      }
+    ],
+    "reasoning": "Medium risk greenfield project. Unit tests verify each parser handles its agent format correctly (critical since each format is different). Integration tests verify the full pipeline produces correct output. No security scan needed since this is a local file-processing CLI. No staging since output is filesystem-based Markdown."
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": true,
+      "commands": [
+        "python3 -m pytest tests/ -v"
+      ],
+      "minimum_coverage": null
+    },
+    "integration_tests": {
+      "required": true,
+      "commands": [
+        "python3 -m pytest tests/test_pipeline.py -v"
+      ],
+      "services_to_test": [
+        "centralagent-brain"
+      ]
+    },
+    "e2e_tests": {
+      "required": false,
+      "commands": [],
+      "flows": []
+    },
+    "browser_verification": {
+      "required": false,
+      "pages": []
+    },
+    "database_verification": {
+      "required": false,
+      "checks": []
+    }
+  },
+  "qa_signoff": null,
+  "executionPhase": "coding",
+  "status": "in_progress",
+  "planStatus": "in_progress",
+  "updated_at": "2026-04-09T13:32:57.991Z"
+}
