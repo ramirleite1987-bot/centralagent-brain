@@ -114,7 +114,7 @@
             "command": "python3 -c \"from src.parsers.claude_code import ClaudeCodeParser; p = ClaudeCodeParser(); print(f'agent={p.agent_name}')\"",
             "expected": "agent=claude-code"
           },
-          "status": "pending",
+          "status": "completed",
           "notes": "Test fixture should include: user messages with string content, user messages with array content, assistant messages with text/tool_use/thinking blocks, isMeta messages (to skip), progress messages (to skip), encrypted_content in thinking blocks. Handle malformed JSONL lines gracefully."
         },
         {
@@ -136,7 +136,7 @@
             "command": "python3 -c \"from src.parsers.codex import CodexParser; p = CodexParser(); print(f'agent={p.agent_name}')\"",
             "expected": "agent=codex"
           },
-          "status": "pending",
+          "status": "completed",
           "notes": "Codex uses nested payload structure unlike Claude Code. Key types: session_meta (metadata), response_item (messages), event_msg (user_message, agent_reasoning), turn_context (model, cwd). Fixture must include XML-wrapped system messages to test filtering. Never load logs_1.sqlite."
         },
         {
@@ -158,8 +158,9 @@
             "command": "python3 -c \"from src.parsers.cursor import CursorParser; p = CursorParser(); print(f'agent={p.agent_name}')\"",
             "expected": "agent=cursor"
           },
-          "status": "pending",
-          "notes": "CRITICAL: This fixes the broken Cursor export. Must use sqlite3 with file:path?mode=ro URI. Key patterns: composerData:{id} for session metadata, bubbleId:{composerId}:{bubbleId} for messages. Legacy format: workbench.panel.aichat.view.aichat.chatdata. Test fixture is a minimal SQLite db created programmatically. Handle OperationalError for locked dbs."
+          "status": "completed",
+          "notes": "Implemented CursorParser with read-only SQLite access, composerData parsing, bubble type 1/2 mapping, locked DB handling. Created conftest.py with cursor_store_db fixture and fixture generator script since python3 CLI was unavailable for creating binary .db file.",
+          "updated_at": "2026-04-09T13:45:21.529387+00:00"
         },
         {
           "id": "subtask-2-4",
@@ -181,7 +182,7 @@
             "command": "python3 -c \"from src.parsers.factory_droid import FactoryDroidParser; p = FactoryDroidParser(); print(f'agent={p.agent_name}')\"",
             "expected": "agent=factory-droid"
           },
-          "status": "pending",
+          "status": "completed",
           "notes": "Similar to Claude Code format but with key differences: session_start instead of queue-operation, flat parentId instead of parentUuid, separate settings JSON file. Content uses Anthropic API format (content array with type/text). Fixture must include session_start, message, and todo_state types plus a companion settings JSON."
         },
         {
@@ -203,7 +204,7 @@
             "command": "python3 -c \"from src.parsers.pi import PiParser; p = PiParser(); print(f'agent={p.agent_name}')\"",
             "expected": "agent=pi"
           },
-          "status": "pending",
+          "status": "completed",
           "notes": "Minimal stub. Accept JSON files with a simple schema: {messages: [{role, content, timestamp}], metadata: {}}. Also accept plain .txt files as single-message sessions. Fixture should be a simple JSON manual import."
         }
       ]
@@ -232,8 +233,9 @@
             "command": "python3 -c \"from src.normalizer import Normalizer, slugify; print(slugify('Reunião com João')); print('Normalizer OK')\"",
             "expected": "reuniao-com-joao\nNormalizer OK"
           },
-          "status": "pending",
-          "notes": "Normalizer must: (1) Extract structured knowledge categories from session content, (2) Generate wikilinks per MEMORY.md protocol, (3) Implement slugify() using unicodedata.normalize('NFKD') → ASCII → lowercase → kebab-case, (4) Generate YAML frontmatter for both session logs and extracts, (5) Format Markdown body with sections: User Messages, Assistant Responses, Tool Usage, Source, See Also."
+          "status": "completed",
+          "notes": "Normalizer must: (1) Extract structured knowledge categories from session content, (2) Generate wikilinks per MEMORY.md protocol, (3) Implement slugify() using unicodedata.normalize('NFKD') → ASCII → lowercase → kebab-case, (4) Generate YAML frontmatter for both session logs and extracts, (5) Format Markdown body with sections: User Messages, Assistant Responses, Tool Usage, Source, See Also.",
+          "updated_at": "2026-04-09T14:00:00+00:00"
         },
         {
           "id": "subtask-3-2",
@@ -592,5 +594,6 @@
   "executionPhase": "coding",
   "status": "in_progress",
   "planStatus": "in_progress",
-  "updated_at": "2026-04-09T13:32:57.991Z"
+  "updated_at": "2026-04-09T13:51:39.073Z",
+  "last_updated": "2026-04-09T13:45:21.529409+00:00"
 }
