@@ -1,0 +1,6 @@
+{"type":"session_start","session_id":"abc-123","timestamp":"2025-06-15T10:00:00Z","cwd":"/home/user/projects/centralagent-brain"}
+{"type":"message","role":"user","content":"Implement the factory droid parser","timestamp":"2025-06-15T10:00:01Z"}
+{"type":"message","role":"assistant","content":[{"type":"text","text":"I'll implement the Factory Droid parser now."},{"type":"tool_use","name":"write_file","input":{"path":"src/parsers/factory_droid.py"}}],"timestamp":"2025-06-15T10:00:05Z"}
+{"type":"message","role":"assistant","content":"Here is the completed parser.","timestamp":"2025-06-15T10:00:10Z"}
+{"type":"todo_state","items":[{"title":"Implement parser","status":"completed"},{"title":"Add tests","status":"in_progress"}],"timestamp":"2025-06-15T10:00:12Z"}
+{"type":"message","role":"user","content":"Looks good, thanks!","timestamp":"2025-06-15T10:00:15Z"}
