@@ -1,0 +1,8 @@
+{"parentMessageId":"","isMeta":true,"type":"summary","summary":"Session about testing","sessionId":"abc-123"}
+{"parentMessageId":"","uuid":"msg-1","role":"human","message":{"content":"Hello, can you help me?"},"timestamp":"2025-01-15T10:00:00.000Z","sessionId":"abc-123"}
+{"parentMessageId":"msg-1","uuid":"msg-2","role":"assistant","message":{"content":[{"type":"text","text":"Sure, I can help you with that."}]},"timestamp":"2025-01-15T10:00:05.000Z","sessionId":"abc-123"}
+{"parentMessageId":"msg-2","uuid":"msg-3","role":"human","message":{"content":"Please create a file for me."},"timestamp":"2025-01-15T10:00:10.000Z","sessionId":"abc-123"}
+{"parentMessageId":"msg-3","uuid":"msg-4","role":"assistant","message":{"content":[{"type":"text","text":"I'll create that file now."},{"type":"tool_use","id":"tool-1","name":"Write","input":{"file_path":"/tmp/test.py","content":"print('hello')"}}]},"timestamp":"2025-01-15T10:00:15.000Z","sessionId":"abc-123"}
+{"parentMessageId":"msg-4","uuid":"msg-5","role":"assistant","message":{"content":[{"type":"tool_result","tool_use_id":"tool-1","content":"File written successfully"}]},"timestamp":"2025-01-15T10:00:16.000Z","sessionId":"abc-123"}
+{"parentMessageId":"msg-5","uuid":"msg-6","role":"human","message":{"content":"Thanks!"},"timestamp":"2025-01-15T10:00:20.000Z","sessionId":"abc-123"}
+{"parentMessageId":"msg-6","uuid":"msg-7","role":"assistant","message":{"content":[{"type":"text","text":"You're welcome!"},{"type":"encrypted_content","data":"base64encodeddata"}]},"timestamp":"2025-01-15T10:00:25.000Z","sessionId":"abc-123"}

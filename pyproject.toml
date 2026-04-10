@@ -1,0 +1,26 @@
+[project]
+name = "centralagent-brain"
+version = "0.1.0"
+description = "Unified AI agent conversation ingestion pipeline for Obsidian second-brain"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+centralagent-brain = "src.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.setuptools.packages.find]
+include = ["src*", "config*"]
