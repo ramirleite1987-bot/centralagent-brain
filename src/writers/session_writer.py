@@ -39,11 +39,14 @@ class SessionWriter(BaseWriter):
 
         file_path = sessions_dir / f"{slug}.md"
 
-        # Append-only: never overwrite existing files
+        # Avoid filename collisions by appending an incrementing suffix
         if file_path.exists():
-            raise FileExistsError(
-                f"Session file already exists (append-only): {file_path}"
-            )
+            counter = 2
+            while True:
+                file_path = sessions_dir / f"{slug}-{counter}.md"
+                if not file_path.exists():
+                    break
+                counter += 1
 
         content = self._render_session(session)
         file_path.write_text(content, encoding="utf-8")
@@ -102,46 +105,41 @@ class SessionWriter(BaseWriter):
         lines.append(f"# Session: {project} - {date_str}")
         lines.append("")
 
-        # User Messages
-        user_msgs = [m for m in session.messages if m.role == Role.USER]
-        lines.append("## User Messages")
+        # Conversation (chronological order preserving context)
+        lines.append("## Conversation")
         lines.append("")
-        if user_msgs:
-            for i, msg in enumerate(user_msgs, 1):
-                lines.append(f"### Message {i}")
+        if session.messages:
+            for i, msg in enumerate(session.messages, 1):
+                role_label = "User" if msg.role == Role.USER else "Assistant"
+                lines.append(f"### {role_label} ({i})")
                 lines.append(msg.content.strip())
+                # Inline tool usage for this message
+                if msg.tool_uses:
+                    lines.append("")
+                    lines.append("**Tools used:**")
+                    for tool in msg.tool_uses:
+                        desc = tool.output[:80] if tool.output else "invoked"
+                        lines.append(f"- `{tool.name}`: {desc}")
                 lines.append("")
         else:
-            lines.append("No user messages recorded.")
+            lines.append("No messages recorded.")
             lines.append("")
 
-        # Assistant Responses
-        assistant_msgs = [m for m in session.messages if m.role == Role.ASSISTANT]
-        lines.append("## Assistant Responses")
-        lines.append("")
-        if assistant_msgs:
-            for i, msg in enumerate(assistant_msgs, 1):
-                lines.append(f"### Response {i}")
-                lines.append(msg.content.strip())
-                lines.append("")
-        else:
-            lines.append("No assistant responses recorded.")
-            lines.append("")
-
-        # Tool Usage
-        tool_uses = []
+        # Tool Usage Summary
+        all_tools = []
         for msg in session.messages:
             for tool in msg.tool_uses:
-                tool_uses.append(tool)
+                all_tools.append(tool)
 
-        lines.append("## Tool Usage")
-        if tool_uses:
-            for tool in tool_uses:
-                desc = tool.output[:80] if tool.output else "invoked"
-                lines.append(f"- {tool.name}: {desc}")
-        else:
-            lines.append("No tool usage recorded.")
-        lines.append("")
+        if all_tools:
+            # Count tool usage
+            tool_counts: dict[str, int] = {}
+            for tool in all_tools:
+                tool_counts[tool.name] = tool_counts.get(tool.name, 0) + 1
+            lines.append("## Tool Summary")
+            for name, count in sorted(tool_counts.items()):
+                lines.append(f"- `{name}`: {count}x")
+            lines.append("")
 
         # Source
         lines.append("## Source")

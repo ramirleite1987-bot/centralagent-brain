@@ -52,7 +52,7 @@ class TestSessionWriter:
         content = path.read_text()
         assert "date: 2025-03-15" in content
 
-    def test_user_messages_section(self, output_dir: Path) -> None:
+    def test_conversation_section_in_order(self, output_dir: Path) -> None:
         session = make_session(
             messages=[
                 make_message(Role.USER, "First question"),
@@ -63,11 +63,18 @@ class TestSessionWriter:
         writer = SessionWriter()
         path = writer.write_session(session, output_dir)
         content = path.read_text()
-        assert "## User Messages" in content
+        assert "## Conversation" in content
+        assert "### User (1)" in content
+        assert "### Assistant (2)" in content
+        assert "### User (3)" in content
         assert "First question" in content
+        assert "First answer" in content
         assert "Second question" in content
+        # Verify chronological order
+        assert content.index("First question") < content.index("First answer")
+        assert content.index("First answer") < content.index("Second question")
 
-    def test_assistant_responses_section(self, output_dir: Path) -> None:
+    def test_assistant_in_conversation(self, output_dir: Path) -> None:
         session = make_session(
             messages=[
                 make_message(Role.USER, "Hi"),
@@ -77,10 +84,10 @@ class TestSessionWriter:
         writer = SessionWriter()
         path = writer.write_session(session, output_dir)
         content = path.read_text()
-        assert "## Assistant Responses" in content
+        assert "## Conversation" in content
         assert "Hello back" in content
 
-    def test_tool_usage_section(self, output_dir: Path) -> None:
+    def test_tool_usage_inline_and_summary(self, output_dir: Path) -> None:
         msg = make_message(
             Role.ASSISTANT,
             "Done",
@@ -90,8 +97,9 @@ class TestSessionWriter:
         writer = SessionWriter()
         path = writer.write_session(session, output_dir)
         content = path.read_text()
-        assert "## Tool Usage" in content
-        assert "Read" in content
+        assert "**Tools used:**" in content
+        assert "`Read`" in content
+        assert "## Tool Summary" in content
 
     def test_wikilinks_section(self, output_dir: Path) -> None:
         session = make_session(project="my-proj", agent="claude-code")
@@ -102,12 +110,15 @@ class TestSessionWriter:
         assert "[[projects/my-proj]]" in content
         assert "[[agents/claude-code]]" in content
 
-    def test_append_only_raises_on_existing(self, output_dir: Path) -> None:
+    def test_collision_creates_suffixed_file(self, output_dir: Path) -> None:
         session = make_session()
         writer = SessionWriter()
-        writer.write_session(session, output_dir)
-        with pytest.raises(FileExistsError):
-            writer.write_session(session, output_dir)
+        path1 = writer.write_session(session, output_dir)
+        path2 = writer.write_session(session, output_dir)
+        assert path1.exists()
+        assert path2.exists()
+        assert path1 != path2
+        assert "-2.md" in path2.name
 
     def test_creates_nested_dirs(self, tmp_path: Path) -> None:
         """Directories are created even if none exist yet."""
@@ -207,13 +218,16 @@ class TestExtractWriter:
         assert "## Wikilinks relacionados" in content
         assert "[[agents/claude-code]]" in content
 
-    def test_append_only_raises_on_existing(self, output_dir: Path) -> None:
+    def test_collision_creates_suffixed_file(self, output_dir: Path) -> None:
         session = make_session()
         writer = ExtractWriter()
         items = self._make_items(session)
-        writer.write_extract(session, items, output_dir)
-        with pytest.raises(FileExistsError):
-            writer.write_extract(session, items, output_dir)
+        path1 = writer.write_extract(session, items, output_dir)
+        path2 = writer.write_extract(session, items, output_dir)
+        assert path1.exists()
+        assert path2.exists()
+        assert path1 != path2
+        assert "-2.md" in path2.name
 
     def test_creates_nested_dirs(self, tmp_path: Path) -> None:
         session = make_session(agent="factory-droid")

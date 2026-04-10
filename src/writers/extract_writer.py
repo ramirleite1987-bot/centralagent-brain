@@ -58,11 +58,15 @@ class ExtractWriter(BaseWriter):
 
         file_path = extracts_dir / filename
 
-        # Append-only: never overwrite existing files
+        # Avoid filename collisions by appending an incrementing suffix
         if file_path.exists():
-            raise FileExistsError(
-                f"Extract file already exists (append-only): {file_path}"
-            )
+            base = f"memory-extract-{agent}-{date_str}"
+            counter = 2
+            while True:
+                file_path = extracts_dir / f"{base}-{counter}.md"
+                if not file_path.exists():
+                    break
+                counter += 1
 
         content = self._render_extract(session, items, date_str)
         file_path.write_text(content, encoding="utf-8")

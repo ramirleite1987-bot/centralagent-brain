@@ -6,10 +6,9 @@ skips isMeta messages and encrypted_content blocks, and resolves
 parentUuid tree into chronological order.
 """
 
-import json
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from config.settings import AgentConfig, Settings
 from src.models import Message, Role, Session, ToolUse
@@ -79,18 +78,6 @@ class ClaudeCodeParser(BaseParser):
             messages=messages,
             source_path=path,
         )
-
-    def _stream_jsonl(self, path: Path) -> Generator[Dict[str, Any], None, None]:
-        """Stream JSONL file line-by-line, skipping malformed lines."""
-        with open(path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    yield json.loads(line)
-                except json.JSONDecodeError:
-                    continue
 
     def _resolve_message_order(
         self, messages: Dict[str, Dict[str, Any]]
@@ -205,18 +192,6 @@ class ClaudeCodeParser(BaseParser):
                 continue
 
         return "\n".join(text_parts), tool_uses
-
-    def _parse_timestamp(self, ts: Optional[str]) -> Optional[datetime]:
-        """Parse an ISO 8601 timestamp string."""
-        if not ts:
-            return None
-        try:
-            # Handle Z suffix
-            if ts.endswith("Z"):
-                ts = ts[:-1] + "+00:00"
-            return datetime.fromisoformat(ts)
-        except (ValueError, TypeError):
-            return None
 
     def _extract_project_name(self, path: Path) -> Optional[str]:
         """Extract project name from session file path.
