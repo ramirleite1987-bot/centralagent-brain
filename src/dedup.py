@@ -21,6 +21,7 @@ class DedupTracker:
         self.state_dir = state_dir or Path(".state")
         self.state_file = self.state_dir / "last_run.json"
         self._state: Dict = self._load()
+        self._exported_cache: Dict[str, Set[str]] = {}
 
     def _load(self) -> Dict:
         """Load state from disk, returning empty state if file doesn't exist."""
@@ -49,34 +50,38 @@ class DedupTracker:
                 "last_run": None,
                 "exported_sessions": [],
             }
+        # Build lookup set on first access for O(1) checks
+        cache = self._exported_cache.get(agent)
+        if cache is None:
+            self._exported_cache[agent] = set(agents[agent]["exported_sessions"])
         return agents[agent]
 
     def is_exported(self, agent: str, session_id: str) -> bool:
         """Check if a session has already been exported."""
-        entry = self._ensure_agent(agent)
-        return session_id in entry["exported_sessions"]
+        self._ensure_agent(agent)
+        return session_id in self._exported_cache[agent]
 
     def get_exported_sessions(self, agent: str) -> Set[str]:
         """Return the set of exported session IDs for an agent."""
-        entry = self._ensure_agent(agent)
-        return set(entry["exported_sessions"])
+        self._ensure_agent(agent)
+        return set(self._exported_cache[agent])
 
     def mark_exported(self, agent: str, session_id: str) -> None:
         """Mark a session as exported."""
         entry = self._ensure_agent(agent)
-        if session_id not in entry["exported_sessions"]:
+        if session_id not in self._exported_cache[agent]:
             entry["exported_sessions"].append(session_id)
+            self._exported_cache[agent].add(session_id)
         entry["last_run"] = datetime.now(timezone.utc).isoformat()
         self._save()
 
     def mark_batch_exported(self, agent: str, session_ids: List[str]) -> None:
         """Mark multiple sessions as exported in a single save."""
         entry = self._ensure_agent(agent)
-        existing = set(entry["exported_sessions"])
         for sid in session_ids:
-            if sid not in existing:
+            if sid not in self._exported_cache[agent]:
                 entry["exported_sessions"].append(sid)
-                existing.add(sid)
+                self._exported_cache[agent].add(sid)
         entry["last_run"] = datetime.now(timezone.utc).isoformat()
         self._save()
 
@@ -92,6 +97,8 @@ class DedupTracker:
                 "last_run": None,
                 "exported_sessions": [],
             }
+            self._exported_cache.pop(agent, None)
         else:
             self._state = {"agents": {}}
+            self._exported_cache.clear()
         self._save()

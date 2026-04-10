@@ -1,8 +1,10 @@
 """Abstract base parser interface and parser registry."""
 
+import json
 from abc import ABC, abstractmethod
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Type
+from typing import Any, Dict, Generator, List, Optional, Type
 
 from src.models import Session
 
@@ -40,6 +42,29 @@ class BaseParser(ABC):
         Raises:
             ValueError: If the session file cannot be parsed.
         """
+
+    @staticmethod
+    def _stream_jsonl(path: Path) -> Generator[Dict[str, Any], None, None]:
+        """Stream JSONL file line-by-line, skipping malformed lines."""
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    yield json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+    @staticmethod
+    def _parse_timestamp(ts: Optional[str]) -> Optional[datetime]:
+        """Parse an ISO-8601 timestamp string, handling Z suffix."""
+        if not ts:
+            return None
+        try:
+            return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except (ValueError, TypeError, AttributeError):
+            return None
 
 
 class ParserRegistry:

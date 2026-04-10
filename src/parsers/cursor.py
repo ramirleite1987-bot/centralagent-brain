@@ -9,12 +9,11 @@ databases gracefully.
 
 import json
 import sqlite3
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from config.settings import AgentConfig, Settings
-from src.models import Message, Role, Session, ToolUse
+from src.models import Message, Role, Session
 from src.parsers.base import BaseParser, ParserRegistry
 
 
@@ -147,11 +146,3 @@ class CursorParser(BaseParser):
 
         return messages
 
-    def _parse_timestamp(self, ts: Optional[str]) -> Optional[datetime]:
-        """Parse an ISO-8601 timestamp string."""
-        if not ts:
-            return None
-        try:
-            return datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        except (ValueError, AttributeError):
-            return None

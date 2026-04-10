@@ -117,7 +117,6 @@ class Pipeline:
         agents: Optional[List[str]] = None,
         dry_run: bool = False,
         force: bool = False,
-        verbose: bool = False,
     ) -> PipelineResult:
         """Run the ingestion pipeline.
 
@@ -125,16 +124,10 @@ class Pipeline:
             agents: List of agent names to process, or None for all enabled.
             dry_run: If True, parse and normalize but don't write files.
             force: If True, re-export already-processed sessions.
-            verbose: If True, enable verbose logging.
 
         Returns:
             PipelineResult with counts per agent.
         """
-        if verbose:
-            logging.basicConfig(level=logging.DEBUG)
-        else:
-            logging.basicConfig(level=logging.INFO)
-
         result = PipelineResult(dry_run=dry_run)
         agent_names = self._resolve_agents(agents)
 
