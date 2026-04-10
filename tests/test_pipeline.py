@@ -37,18 +37,20 @@ def _make_claude_session_file(sessions_dir: Path, session_id: str = "abc123") ->
     session_file = sessions_dir / f"{session_id}.jsonl"
     lines = [
         json.dumps({
-            "parentUuid": None,
+            "parentMessageId": "",
             "uuid": "msg-1",
-            "type": "human",
-            "message": {"role": "user", "content": "Hello"},
+            "role": "human",
+            "message": {"content": "Hello"},
             "timestamp": "2025-01-15T10:00:00Z",
+            "sessionId": session_id,
         }),
         json.dumps({
-            "parentUuid": "msg-1",
+            "parentMessageId": "msg-1",
             "uuid": "msg-2",
-            "type": "assistant",
-            "message": {"role": "assistant", "content": [{"type": "text", "text": "Hi there!"}]},
+            "role": "assistant",
+            "message": {"content": [{"type": "text", "text": "Hi there!"}]},
             "timestamp": "2025-01-15T10:00:01Z",
+            "sessionId": session_id,
         }),
     ]
     session_file.write_text("\n".join(lines) + "\n", encoding="utf-8")

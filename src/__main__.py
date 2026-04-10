@@ -1,4 +1,4 @@
-"""Entry point for python -m centralagent_brain execution."""
+"""Entry point for python -m src execution."""
 
 from src.cli import main
 
