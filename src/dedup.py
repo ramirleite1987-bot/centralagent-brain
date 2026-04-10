@@ -7,7 +7,7 @@ sessions that have already been ingested. Supports --force flag to re-export all
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Optional, Set
+from typing import Dict, List, Optional, Set
 
 
 class DedupTracker:
@@ -69,7 +69,7 @@ class DedupTracker:
         entry["last_run"] = datetime.now(timezone.utc).isoformat()
         self._save()
 
-    def mark_batch_exported(self, agent: str, session_ids: list[str]) -> None:
+    def mark_batch_exported(self, agent: str, session_ids: List[str]) -> None:
         """Mark multiple sessions as exported in a single save."""
         entry = self._ensure_agent(agent)
         existing = set(entry["exported_sessions"])
