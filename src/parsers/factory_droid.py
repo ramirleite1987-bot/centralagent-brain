@@ -23,7 +23,9 @@ class FactoryDroidParser(BaseParser):
     def __init__(self, settings: Optional[Settings] = None) -> None:
         self._settings = settings or Settings()
         agent_cfg: AgentConfig = self._settings.agents["factory-droid"]
-        self._source_path: Path = agent_cfg.source_path or Path("~/.factory/sessions").expanduser()
+        self._source_path: Path = (
+            agent_cfg.source_path or Path("~/.factory/sessions").expanduser()
+        )
 
     @property
     def agent_name(self) -> str:
@@ -44,7 +46,6 @@ class FactoryDroidParser(BaseParser):
         metadata: Dict[str, Any] = {}
         todo_items: List[Dict[str, str]] = []
 
-        # Read companion settings file
         settings_path = path.with_suffix(".settings.json")
         settings_data = self._read_settings(settings_path)
         if settings_data:
@@ -56,7 +57,10 @@ class FactoryDroidParser(BaseParser):
             entry_type = entry.get("type", "")
 
             if entry_type == "session_start":
-                session_id = entry.get("session_id", path.stem)
+                session_id = entry.get("id") or entry.get("session_id", path.stem)
+                title = entry.get("title") or entry.get("sessionTitle")
+                if title and not project:
+                    project = title
                 cwd = entry.get("cwd")
                 if cwd and not project:
                     project = Path(cwd).name
@@ -69,10 +73,10 @@ class FactoryDroidParser(BaseParser):
                 continue
 
             if entry_type == "todo_state":
-                items = entry.get("items", [])
+                todos = entry.get("todos", entry.get("items", []))
                 todo_items = [
                     {"title": item.get("title", ""), "status": item.get("status", "")}
-                    for item in items
+                    for item in todos
                     if isinstance(item, dict)
                 ]
 
@@ -102,8 +106,23 @@ class FactoryDroidParser(BaseParser):
             return None
 
     def _parse_message(self, entry: Dict[str, Any]) -> Optional[Message]:
-        """Parse a message entry into a Message object."""
-        role_str = entry.get("role", "")
+        """Parse a message entry into a Message object.
+
+        Supports two formats:
+        - Legacy: role and content at root level
+        - New: role and content inside message object
+        """
+        if isinstance(entry.get("message"), dict):
+            msg_data = entry["message"]
+            role_str = msg_data.get("role", "")
+            content_raw = msg_data.get("content", "")
+        else:
+            role_str = entry.get("role", "")
+            content_raw = entry.get("content", "")
+
+        if not role_str:
+            return None
+
         if role_str == "user":
             role = Role.USER
         elif role_str == "assistant":
@@ -111,7 +130,6 @@ class FactoryDroidParser(BaseParser):
         else:
             return None
 
-        content_raw = entry.get("content", "")
         content, tool_uses = self._extract_content(content_raw)
 
         if not content and not tool_uses:
@@ -131,7 +149,7 @@ class FactoryDroidParser(BaseParser):
 
         Handles two formats:
         - String: plain text content
-        - Array: list of content blocks (text, tool_use)
+        - Array: list of content blocks (text, thinking, tool_use)
         """
         if isinstance(content_raw, str):
             return content_raw, []
@@ -152,6 +170,8 @@ class FactoryDroidParser(BaseParser):
                 text = block.get("text", "")
                 if text:
                     text_parts.append(text)
+            elif block_type == "thinking":
+                continue
             elif block_type == "tool_use":
                 tool_uses.append(
                     ToolUse(
@@ -161,4 +181,3 @@ class FactoryDroidParser(BaseParser):
                 )
 
         return "\n\n".join(text_parts), tool_uses
-

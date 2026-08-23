@@ -22,7 +22,9 @@ class ClaudeCodeParser(BaseParser):
     def __init__(self, settings: Optional[Settings] = None) -> None:
         self._settings = settings or Settings()
         agent_cfg: AgentConfig = self._settings.agents["claude-code"]
-        self._source_path: Path = agent_cfg.source_path or Path("~/.claude/projects").expanduser()
+        self._source_path: Path = (
+            agent_cfg.source_path or Path("~/.claude/projects").expanduser()
+        )
 
     @property
     def agent_name(self) -> str:
@@ -121,21 +123,31 @@ class ClaudeCodeParser(BaseParser):
         return ordered
 
     def _parse_message(self, raw: Dict[str, Any]) -> Optional[Message]:
-        """Parse a raw JSONL message dict into a Message object."""
+        """Parse a raw JSONL message dict into a Message object.
+
+        Supports two formats:
+        - Legacy: role at root level (role="human"|"assistant")
+        - New: role inside message object (message.role="user"|"assistant")
+        """
         role_str = raw.get("role", "")
-        if role_str == "human":
+        message_data = raw.get("message", {})
+
+        if not role_str and isinstance(message_data, dict):
+            role_str = message_data.get("role", "")
+
+        if role_str == "human" or role_str == "user":
             role = Role.USER
         elif role_str == "assistant":
             role = Role.ASSISTANT
         else:
             return None
 
-        message_data = raw.get("message", {})
-        content_raw = message_data.get("content", "")
+        content_raw = (
+            message_data.get("content", "") if isinstance(message_data, dict) else ""
+        )
 
         content, tool_uses = self._extract_content(content_raw)
 
-        # Skip messages with no usable content
         if not content and not tool_uses:
             return None
 

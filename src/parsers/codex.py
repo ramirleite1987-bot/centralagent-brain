@@ -22,7 +22,9 @@ class CodexParser(BaseParser):
     def __init__(self, settings: Optional[Settings] = None) -> None:
         self._settings = settings or Settings()
         agent_cfg: AgentConfig = self._settings.agents["codex"]
-        self._source_path: Path = agent_cfg.source_path or Path("~/.codex/sessions").expanduser()
+        self._source_path: Path = (
+            agent_cfg.source_path or Path("~/.codex/sessions").expanduser()
+        )
 
     @property
     def agent_name(self) -> str:
@@ -45,22 +47,26 @@ class CodexParser(BaseParser):
         for entry in self._stream_jsonl(path):
             entry_type = entry.get("type", "")
 
+            has_payload = "payload" in entry and isinstance(entry["payload"], dict)
+            payload = entry.get("payload", {}) if has_payload else entry
+
             if entry_type == "session_meta":
-                session_id = entry.get("session_id", path.stem)
-                metadata["model"] = entry.get("model")
-                metadata["version"] = entry.get("version")
-                cwd = entry.get("cwd")
+                session_id = payload.get("id") or payload.get("session_id", path.stem)
+                metadata["model"] = payload.get("model") or payload.get(
+                    "model_provider"
+                )
+                metadata["version"] = payload.get("version") or payload.get(
+                    "cli_version"
+                )
+                cwd = payload.get("cwd")
                 if cwd:
                     project = Path(cwd).name
                 continue
 
-            if entry_type in ("response_item", "user_message"):
-                parsed = self._parse_entry(entry)
+            if entry_type in ("response_item", "event_msg", "user_message"):
+                parsed = self._parse_entry(entry_type, payload)
                 if parsed is not None:
                     messages.append(parsed)
-
-            # agent_reasoning and turn_context are skipped as messages
-            # but could be used for enrichment in the future
 
         timestamp = messages[0].timestamp if messages else None
 
@@ -71,49 +77,63 @@ class CodexParser(BaseParser):
             project=project,
             messages=messages,
             source_path=path,
+            metadata=metadata,
         )
 
-    def _parse_entry(self, entry: Dict[str, Any]) -> Optional[Message]:
-        """Parse a JSONL entry into a Message object.
+    def _parse_entry(
+        self, entry_type: str, payload: Dict[str, Any]
+    ) -> Optional[Message]:
+        """Parse a JSONL entry payload into a Message object.
 
         Filters out XML-wrapped system messages (content starting with <).
         """
-        entry_type = entry.get("type", "")
+        if entry_type == "event_msg":
+            msg_type = payload.get("type", "")
+            if msg_type == "user_message":
+                content = payload.get("message", "")
+                if isinstance(content, list):
+                    content = " ".join(str(c) for c in content if c)
+                if not content or self._is_xml_system_message(content):
+                    return None
+                timestamp = self._parse_timestamp(payload.get("timestamp"))
+                return Message(role=Role.USER, content=content, timestamp=timestamp)
+            return None
 
         if entry_type == "user_message":
-            content = entry.get("content", "")
+            content = payload.get("content", "")
             if not content or self._is_xml_system_message(content):
                 return None
-            timestamp = self._parse_timestamp(entry.get("timestamp"))
+            timestamp = self._parse_timestamp(payload.get("timestamp"))
             return Message(role=Role.USER, content=content, timestamp=timestamp)
 
-        # response_item
-        role_str = entry.get("role", "")
-        if role_str == "user":
-            role = Role.USER
-        elif role_str == "assistant":
-            role = Role.ASSISTANT
-        else:
-            return None
+        if entry_type == "response_item":
+            role_str = payload.get("role", "")
+            if role_str == "user":
+                role = Role.USER
+            elif role_str in ("assistant", "developer"):
+                role = Role.ASSISTANT
+            else:
+                return None
 
-        content_raw = entry.get("content", "")
-        content, tool_uses = self._extract_content(content_raw)
+            content_raw = payload.get("content", "")
+            content, tool_uses = self._extract_content(content_raw)
 
-        # Filter XML-wrapped system messages
-        if self._is_xml_system_message(content):
-            return None
+            if self._is_xml_system_message(content):
+                return None
 
-        if not content and not tool_uses:
-            return None
+            if not content and not tool_uses:
+                return None
 
-        timestamp = self._parse_timestamp(entry.get("timestamp"))
+            timestamp = self._parse_timestamp(payload.get("timestamp"))
 
-        return Message(
-            role=role,
-            content=content,
-            timestamp=timestamp,
-            tool_uses=tool_uses,
-        )
+            return Message(
+                role=role,
+                content=content,
+                timestamp=timestamp,
+                tool_uses=tool_uses,
+            )
+
+        return None
 
     def _is_xml_system_message(self, content: str) -> bool:
         """Check if content is an XML-wrapped system message."""
@@ -122,9 +142,9 @@ class CodexParser(BaseParser):
     def _extract_content(self, content_raw: Any) -> Tuple[str, List[ToolUse]]:
         """Extract text content and tool uses from message content.
 
-        Handles two formats:
+        Handles multiple formats:
         - String: plain text content
-        - Array: list of content blocks (text, tool_use)
+        - Array: list of content blocks (text, tool_use, output_text, input_text)
         """
         if isinstance(content_raw, str):
             return content_raw, []
@@ -141,7 +161,7 @@ class CodexParser(BaseParser):
 
             block_type = block.get("type", "")
 
-            if block_type == "text":
+            if block_type in ("text", "output_text", "input_text"):
                 text = block.get("text", "")
                 if text:
                     text_parts.append(text)
@@ -154,4 +174,3 @@ class CodexParser(BaseParser):
                 )
 
         return "\n\n".join(text_parts), tool_uses
-
